@@ -1,11 +1,24 @@
 ﻿from dotenv import load_dotenv
 import os
+from web3 import Web3  # Thêm thư viện Web3 để chuẩn hóa địa chỉ
 
 load_dotenv()
 
 ETHERSCAN_API_KEY = os.getenv("ETHERSCAN_API_KEY")
-CONTRACT_ADDRESS = os.getenv("CONTRACT_ADDRESS")
 RPC_URL = os.getenv("RPC_URL", "https://ethereum-rpc.publicnode.com")
+
+# --- ĐOẠN CODE TỰ ĐỘNG BỌC LỖI CHO CONTRACT ADDRESS ---
+raw_address = os.getenv("CONTRACT_ADDRESS")
+
+# Kiểm tra nếu có địa chỉ nhưng bị thiếu '0x' thì tự động nối vào
+if raw_address and not raw_address.startswith("0x"):
+    raw_address = "0x" + raw_address
+
+# Chuẩn hóa thành Checksum Address (bắt buộc đối với phần lớn RPC)
+if raw_address:
+    CONTRACT_ADDRESS = Web3.to_checksum_address(raw_address)
+else:
+    CONTRACT_ADDRESS = None
 
 # Tùy chọn — KHÔNG bắt buộc: tất cả endpoint Binance dùng trong dự án này là
 # market data công khai (funding rate, open interest, klines, order book...),
