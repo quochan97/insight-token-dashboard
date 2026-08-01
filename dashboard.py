@@ -1433,7 +1433,6 @@ else:
 # ════════════════════════════════════════════════════════════
 # 🛠️ TỐI ƯU HÓA THỰC THI LỆNH (TRADE EXECUTION)
 # ════════════════════════════════════════════════════════════
-st.markdown("<br><br>", unsafe_allow_html=True)
 st.markdown("---")
 
 st.markdown(
