@@ -1,0 +1,113 @@
+<!-- web/wallet_gate.html -->
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>InsightToken Dashboard</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap');
+  body {
+    font-family: 'Inter', Arial, sans-serif;
+    background: #FFFFFF;
+    color: #14151A;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+  }
+  .card {
+    background: #FAFAFA;
+    padding: 40px;
+    border-radius: 12px;
+    border: 1px solid #E1E2E6;
+    max-width: 460px;
+    text-align: center;
+  }
+  h1 { font-family: 'Space Grotesk', sans-serif; color: #14151A; font-size: 2rem; margin-bottom: 8px; font-weight: 700; }
+  .btn {
+    background: #4338CA;
+    color: white;
+    border: none;
+    padding: 14px 32px;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 24px;
+  }
+  .btn:hover { background: #372DAD; }
+  .status { margin-top: 16px; font-size: 0.85rem; font-family: 'IBM Plex Mono', monospace; color: #6B6D76; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h1>InsightToken Dashboard</h1>
+  <p>Kết nối ví MetaMask để truy cập phân tích on-chain</p>
+  <button class="btn" onclick="connectWallet()">Kết nối MetaMask</button>
+  <div class="status" id="status">Chưa kết nối</div>
+</div>
+
+<script>
+  // Đã điền sẵn contract address thật của bạn (deploy trên Sepolia)
+  const CONTRACT_ADDRESS = '0x0250b1920998963518973fD7D6a4CfE7A5da38Da';
+
+  // ĐIỀN ETHERSCAN API KEY CỦA BẠN VÀO ĐÂY (giữa 2 dấu nháy đơn)
+  const ETHERSCAN_KEY = 'IT2Q3RCMJHB4ICM5N1BZNIIG7BIJQHYMXS';
+
+  const CHAIN_ID = 11155111; // Sepolia testnet. Đổi thành 1 nếu dùng mainnet
+  const STREAMLIT_URL = 'http://localhost:8501';
+
+  async function connectWallet() {
+    if (!window.ethereum) {
+      alert('Vui lòng cài đặt MetaMask!');
+      return;
+    }
+
+    const statusEl = document.getElementById('status');
+
+    try {
+      // Yêu cầu người dùng cấp quyền truy cập ví
+      const accounts = await window.ethereum.request({
+        method: 'eth_requestAccounts'
+      });
+      const walletAddress = accounts[0];
+
+      statusEl.innerText = 'Đang kiểm tra số dư token...';
+
+      // Kiểm tra balance IST qua Etherscan API V2
+      // (V1 đã bị Etherscan khai tử, phải dùng V2 + chainid)
+      const url = `https://api.etherscan.io/v2/api` +
+        `?chainid=${CHAIN_ID}` +
+        `&module=account&action=tokenbalance` +
+        `&contractaddress=${CONTRACT_ADDRESS}&address=${walletAddress}` +
+        `&tag=latest&apikey=${ETHERSCAN_KEY}`;
+
+      const resp = await fetch(url);
+      const data = await resp.json();
+
+      if (data.status === '0' && data.message !== 'OK') {
+        statusEl.innerText = `Lỗi Etherscan: ${data.message} - ${data.result}`;
+        return;
+      }
+
+      const balanceIST = parseInt(data.result) / 1e18;
+      statusEl.innerText = `Ví: ${walletAddress.slice(0,6)}...${walletAddress.slice(-4)} | Balance: ${balanceIST} IST`;
+
+      // Chuyển hướng vào Streamlit với địa chỉ ví, tier, và balance
+      const tier = balanceIST >= 10 ? 'premium' : 'free';
+
+      setTimeout(() => {
+        window.location.href =
+          `${STREAMLIT_URL}?wallet=${walletAddress}&tier=${tier}&balance=${balanceIST}`;
+      }, 1000);
+
+    } catch (err) {
+      statusEl.innerText = `Lỗi: ${err.message}`;
+      console.error(err);
+    }
+  }
+</script>
+
+</body>
+</html>
