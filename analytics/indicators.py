@@ -585,6 +585,9 @@ def generate_derivatives_insights(funding_rate_current=None, oi_change_pct=None,
 
 
 def resample_by_timeframe(df, timeframe="Ngày", agg="last"):
+    if not isinstance(df.index, pd.DatetimeIndex):
+        df = df.copy()
+        df.index = pd.to_datetime(df.index)
     """
     Chuyển đổi dữ liệu theo chuỗi thời gian (index kiểu datetime) sang
     khung Ngày/Tuần/Tháng bằng pandas resample.
