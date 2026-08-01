@@ -588,6 +588,9 @@ def resample_by_timeframe(df, timeframe="Ngày", agg="last"):
     if not isinstance(df.index, pd.DatetimeIndex):
         df = df.copy()
         df.index = pd.to_datetime(df.index)
+    for col in df.columns:
+        if df[col].dtype == object:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
     """
     Chuyển đổi dữ liệu theo chuỗi thời gian (index kiểu datetime) sang
     khung Ngày/Tuần/Tháng bằng pandas resample.
