@@ -6,3 +6,4 @@ requests
 scikit-learn
 statsmodels
 python-dotenv
+web3
