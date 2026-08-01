@@ -1096,7 +1096,7 @@ if tier == "premium":
             fig_ls = go.Figure()
             fig_ls.add_trace(go.Scatter(x=ls_df.index, y=ls_df["longShortRatio"], line=dict(color=COLORS["accent"])))
             fig_ls.add_hline(y=1, line_dash="dash", line_color="gray")
-            fig_ls.update_layout(template=PLOTLY_TEMPLATE, height=260, yaxis_title="Long/Short Ratio")
+            fig_ls.update_layout(template=PLOTLY_TEMPLATE, height=260, yaxis_title="L/S Ratio")
             st.plotly_chart(fig_ls, use_container_width=True)
     with colc2:
         if taker_df is not None and not taker_df.empty:
