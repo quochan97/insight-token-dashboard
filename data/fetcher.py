@@ -6,11 +6,54 @@ import pandas as pd
 import sys
 import os
 import time
-from config import ETHERSCAN_API_KEY, DUNE_API_KEY, COINGECKO_API_KEY
+import threading
 
 # Cho phép import config.py từ thư mục cha (insight_dashboard/)
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import ETHERSCAN_API_KEY, DUNE_API_KEY
+from config import ETHERSCAN_API_KEY, DUNE_API_KEY, COINGECKO_API_KEY
+
+
+# ═══════════════════════════════════════════════════════════════
+# RATE LIMITER TOÀN CỤC CHO ETHERSCAN
+# Etherscan free tier giới hạn THẬT là 3 request/giây (đã xác nhận qua lỗi
+# "Max calls per sec rate limit reached (3/sec)"). Nhiều hàm trong file
+# này gọi Etherscan từ BÊN TRONG ThreadPoolExecutor riêng của từng hàm
+# (netflow, issuance, whale...) — khi các hàm này chạy SONG SONG với nhau
+# (qua parallel_run() ở dashboard.py), tổng số luồng cộng dồn lại dễ dàng
+# vượt xa 3/giây dù mỗi hàm tự giới hạn max_workers riêng của nó — kết quả
+# là 1 số ngày bị lỗi rate-limit ngẫu nhiên mỗi lần chạy (khác ngày mỗi
+# lần), đúng triệu chứng "reload vài lần thì hiện thêm nhưng không hết".
+#
+# Giải pháp: 1 rate limiter DÙNG CHUNG cho TOÀN BỘ file — mọi lệnh gọi
+# Etherscan, bất kể đang chạy trong luồng/hàm nào, đều phải xếp hàng qua
+# đây trước khi được gửi đi. Đặt ngưỡng 2/giây (dưới mức thật 3/giây một
+# chút) để có margin an toàn.
+# ═══════════════════════════════════════════════════════════════
+_ETHERSCAN_RATE_LIMIT = 2.0  # request/giây
+_etherscan_lock = threading.Lock()
+_etherscan_next_slot = [0.0]
+
+
+def _etherscan_get(params, timeout=15):
+    """
+    Gọi Etherscan API (module=..., action=...) kèm rate limit TOÀN CỤC.
+    Dùng hàm này thay vì requests.get() trực tiếp ở MỌI nơi gọi Etherscan
+    trong file — nếu thêm hàm mới cần gọi Etherscan, hãy dùng lại hàm này.
+    """
+    url = "https://api.etherscan.io/v2/api"
+    full_params = {**params, "apikey": ETHERSCAN_API_KEY}
+
+    with _etherscan_lock:
+        now = time.monotonic()
+        wait = _etherscan_next_slot[0] - now
+        if wait > 0:
+            time.sleep(wait)
+            now = time.monotonic()
+        _etherscan_next_slot[0] = max(now, _etherscan_next_slot[0]) + (1.0 / _ETHERSCAN_RATE_LIMIT)
+
+    response = requests.get(url, params=full_params, timeout=timeout)
+    response.raise_for_status()
+    return response.json()
 
 
 def fetch_eth_price_history(days=365):
@@ -78,7 +121,6 @@ def fetch_token_balance(wallet_address, contract_address):
     wallet_address: địa chỉ ví cần kiểm tra (ví dụ '0xAbC123...')
     contract_address: địa chỉ smart contract InsightToken đã deploy
     """
-    url = "https://api.etherscan.io/v2/api"
     params = {
         "chainid": 11155111,  # Sepolia testnet (mainnet là 1)
         "module": "account",
@@ -86,12 +128,9 @@ def fetch_token_balance(wallet_address, contract_address):
         "contractaddress": contract_address,
         "address": wallet_address,
         "tag": "latest",
-        "apikey": ETHERSCAN_API_KEY,
     }
 
-    response = requests.get(url, params=params, timeout=10)
-    response.raise_for_status()
-    data = response.json()
+    data = _etherscan_get(params, timeout=10)
 
     if data.get("status") == "0" and data.get("message") != "OK":
         raise ValueError(f"Etherscan trả lỗi: {data.get('message')} - {data.get('result')}")
@@ -288,15 +327,11 @@ def get_block_number_by_timestamp(dt, closest="before"):
     khai vĩnh viễn, KHÔNG cần node archive — khác với số dư tài khoản lịch
     sử vốn là tính năng Etherscan Pro trả phí).
     """
-    url = "https://api.etherscan.io/v2/api"
     params = {
         "chainid": 1, "module": "block", "action": "getblocknobytime",
         "timestamp": int(pd.Timestamp(dt).timestamp()), "closest": closest,
-        "apikey": ETHERSCAN_API_KEY,
     }
-    resp = requests.get(url, params=params, timeout=15)
-    resp.raise_for_status()
-    data = resp.json()
+    data = _etherscan_get(params, timeout=15)
     if data.get("status") == "0":
         raise ValueError(f"Etherscan getblocknobytime lỗi: {data.get('result')}")
     return int(data["result"])
@@ -307,12 +342,8 @@ def fetch_eth_supply_stats():
     Lấy tổng cung ETH, số ETH đã stake, số ETH đã burn (từ EIP-1559).
     Endpoint ethsupply2 miễn phí trên mainnet.
     """
-    url = "https://api.etherscan.io/v2/api"
-    params = {"chainid": 1, "module": "stats", "action": "ethsupply2", "apikey": ETHERSCAN_API_KEY}
-
-    response = requests.get(url, params=params, timeout=15)
-    response.raise_for_status()
-    data = response.json()
+    params = {"chainid": 1, "module": "stats", "action": "ethsupply2"}
+    data = _etherscan_get(params, timeout=15)
 
     if data.get("status") == "0" and data.get("message") != "OK":
         raise ValueError(f"Etherscan trả lỗi: {data.get('message')} - {data.get('result')}")
@@ -585,8 +616,6 @@ def fetch_daily_netflow_history(days=30, max_pages_per_day=3):
     have = set(existing["date"].dt.normalize()) if not existing.empty else set()
     missing_dates = sorted(d for d in target_dates if d not in have)
 
-    url = "https://api.etherscan.io/v2/api"
-
     def _fetch_wallet_netflow(d, addr, start_block, end_block):
         """
         Trả về (d, net_eth, is_partial, ok). ok=False nghĩa là gọi API
@@ -603,12 +632,12 @@ def fetch_daily_netflow_history(days=30, max_pages_per_day=3):
             params = {
                 "chainid": 1, "module": "account", "action": "txlist", "address": addr,
                 "startblock": start_block, "endblock": end_block,
-                "page": page, "offset": 10000, "sort": "asc", "apikey": ETHERSCAN_API_KEY,
+                "page": page, "offset": 10000, "sort": "asc",
             }
             resp_json = None
             for attempt in range(2):  # 1 lần thử + 1 lần retry nếu lỗi tạm thời
                 try:
-                    resp_json = requests.get(url, params=params, timeout=20).json()
+                    resp_json = _etherscan_get(params, timeout=20)
                     break
                 except Exception:
                     if attempt == 0:
