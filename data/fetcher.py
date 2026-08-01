@@ -6,6 +6,7 @@ import pandas as pd
 import sys
 import os
 import time
+from config import ETHERSCAN_API_KEY, DUNE_API_KEY, COINGECKO_API_KEY
 
 # Cho phép import config.py từ thư mục cha (insight_dashboard/)
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -13,22 +14,30 @@ from config import ETHERSCAN_API_KEY, DUNE_API_KEY
 
 
 def fetch_eth_price_history(days=365):
-    """
-    Lấy lịch sử giá ETH từ CoinGecko.
-    KHÔNG cần API key — endpoint này miễn phí và công khai.
-    """
     url = "https://api.coingecko.com/api/v3/coins/ethereum/market_chart"
     params = {"vs_currency": "usd", "days": days, "interval": "daily"}
+    headers = {"x-cg-demo-api-key": COINGECKO_API_KEY} if COINGECKO_API_KEY else {}
 
-    response = requests.get(url, params=params, timeout=10)
-    response.raise_for_status()  # báo lỗi rõ nếu request thất bại
-    data = response.json()
+    last_error = None
+    for attempt, wait_s in enumerate([0, 1, 2, 4]):
+        if wait_s:
+            time.sleep(wait_s)
+        try:
+            response = requests.get(url, params=params, headers=headers, timeout=10)
+            if response.status_code == 429:
+                last_error = f"429 Too Many Requests (lần thử {attempt + 1}/4)"
+                continue
+            response.raise_for_status()
+            data = response.json()
+            df = pd.DataFrame(data["prices"], columns=["timestamp", "price"])
+            df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
+            df["volume"] = [v[1] for v in data["total_volumes"]]
+            df.set_index("timestamp", inplace=True)
+            return df
+        except requests.exceptions.RequestException as e:
+            last_error = str(e)
 
-    df = pd.DataFrame(data["prices"], columns=["timestamp", "price"])
-    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
-    df["volume"] = [v[1] for v in data["total_volumes"]]
-    df.set_index("timestamp", inplace=True)
-    return df
+    raise ValueError(f"Không lấy được giá ETH từ CoinGecko sau 4 lần thử: {last_error}")
 
 
 def fetch_gas_history(num_blocks=200):

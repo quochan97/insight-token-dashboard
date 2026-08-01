@@ -26,6 +26,13 @@ else:
 # limit; để trống vẫn hoạt động bình thường.
 BINANCE_API_KEY = os.getenv("BINANCE_API_KEY", None)
 
+# Tùy chọn nhưng RẤT NÊN có khi deploy lên hosting dùng IP chia sẻ (Render,
+# Streamlit Cloud...): CoinGecko Public API không key giới hạn 5-15
+# request/phút tính CHUNG theo IP — dễ bị 429 dù chính app gọi rất ít. Đăng
+# ký Demo key MIỄN PHÍ tại coingecko.com/en/api/pricing để lên 30 req/phút,
+# tính riêng theo tài khoản. Để trống vẫn chạy được, chỉ dễ bị 429 hơn.
+COINGECKO_API_KEY = os.getenv("COINGECKO_API_KEY", None)
+
 # BẮT BUỘC cho 2 tính năng mới: Staking Ratio (query Dune 1933048) và
 # Staking Flows (query Dune 2371805). Đăng ký miễn phí tại dune.com,
 # vào Settings → API → tạo key, dán vào .env dạng: DUNE_API_KEY=...
