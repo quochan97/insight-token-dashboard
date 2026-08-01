@@ -510,9 +510,9 @@ if tier == "premium":
 
     NUM_BLOCKS_SCAN = 100
     WHALE_THRESHOLD_ETH = 1000  # ≥1000 ETH mới tính là "cá voi" — 100 ETH (~vài trăm nghìn USD) quá phổ biến để có ý nghĩa phân loại
-    NETFLOW_BACKFILL_DAYS = 60    # tăng từ 30 lên 60 — mỗi ngày cần quét txlist 4 ví (Etherscan), tăng thêm sẽ chậm hơn tuyến tính
-    ISSUANCE_BACKFILL_DAYS = 90   # tăng từ 30 lên 90 — burn dùng 1 batch RPC duy nhất nên gần như không tốn thêm thời gian dù tăng nhiều
-    GAS_HOURLY_BACKFILL_HOURS = 2160  # 90 ngày — đủ để khung Tuần/Tháng có ý nghĩa; vẫn rẻ vì chỉ 1 batch RPC dù tăng số giờ
+    NETFLOW_BACKFILL_DAYS = 14    # tăng từ 30 lên 60 — mỗi ngày cần quét txlist 4 ví (Etherscan), tăng thêm sẽ chậm hơn tuyến tính
+    ISSUANCE_BACKFILL_DAYS = 30   # tăng từ 30 lên 90 — burn dùng 1 batch RPC duy nhất nên gần như không tốn thêm thời gian dù tăng nhiều
+    GAS_HOURLY_BACKFILL_HOURS = 720  # 90 ngày — đủ để khung Tuần/Tháng có ý nghĩa; vẫn rẻ vì chỉ 1 batch RPC dù tăng số giờ
 
     with st.spinner(f"Đang tải On-Chain Chuyên Sâu (song song: quét {NUM_BLOCKS_SCAN} block, dựng lịch sử "
                      f"Netflow/Net Issuance/Gas Fee theo giờ)... lần đầu có thể mất khoảng "
